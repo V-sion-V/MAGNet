@@ -32,6 +32,7 @@ shutil.copy("opt.py", os.path.join(current_checkpoint_dir, "opt.txt"))
 for epoch in range(1, opt.epochs+1):
     model.train()
     total_train_loss = 0
+    range_train_loss = 0
     for (batch_idx, data) in enumerate(train_loader):
         lr, hr, guide = data["LR"].cuda(), data["HR"].cuda(), data["Guide"].cuda()
         optim.zero_grad()
@@ -39,13 +40,17 @@ for epoch in range(1, opt.epochs+1):
         loss = utils.ssim_loss(pred_hr, hr)
         #print(loss.item())
         total_train_loss += loss.item()
+        range_train_loss += loss.item()
         loss.backward()
         optim.step()
 
-        if batch_idx % (train_loader.__len__() // opt.print_loss_in_one_epoch) == (train_loader.__len__() // opt.print_loss_in_one_epoch - 1):
-            print(f"Epoch: {epoch}, {batch_idx * 1000 // train_loader.__len__() / 10}%, Average Train Loss: {total_train_loss / batch_idx}")
+        batch_to_print = train_loader.__len__() // opt.print_loss_in_one_epoch
+        if batch_idx % batch_to_print == batch_to_print - 1:
+            print(f"Epoch: {epoch}, {batch_idx * 1000 // train_loader.__len__() / 10}%, "
+                  f"Average Train Loss: {range_train_loss / batch_to_print}")
+            range_train_loss = 0
 
-    total_train_loss /= test_loader.__len__()
+    total_train_loss /= train_loader.__len__()
 
     model.eval()
     with torch.no_grad():
@@ -60,6 +65,6 @@ for epoch in range(1, opt.epochs+1):
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:
         print(f"Epoch {epoch} model saved.")
-        torch.save(model.state_dict(), os.path.join(current_checkpoint_dir, f"model{opt.epochs}.pth"))
+        torch.save(model.state_dict(), os.path.join(current_checkpoint_dir, f"model{epoch}.pth"))
 
 torch.save(model.state_dict(), os.path.join(current_checkpoint_dir, f"model{opt.epochs}.pth"))
