@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="TransTest" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="TransTest" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="thermalGAN" project-jdk-type="Python SDK" />
 </project>
