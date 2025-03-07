@@ -43,6 +43,6 @@ def get_dataset(train:bool):
                        os.path.join(opt.train_dataset_path, opt.guide_dir_name),
                        os.path.join(opt.train_dataset_path, opt.hr_dir_name))
     else:
-        return GSRDataset(os.path.join(opt.test_dataset_path, opt.lr_dir_name),
-                       os.path.join(opt.test_dataset_path, opt.guide_dir_name),
-                       os.path.join(opt.test_dataset_path, opt.hr_dir_name))
+        return GSRDataset(os.path.join(opt.eval_dataset_path, opt.lr_dir_name),
+                       os.path.join(opt.eval_dataset_path, opt.guide_dir_name),
+                       os.path.join(opt.eval_dataset_path, opt.hr_dir_name))

@@ -18,15 +18,15 @@ from PIL import Image
 train_set = dataset.get_dataset(train=True)
 train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 
-test_set = dataset.get_dataset(train=False)
-test_loader = DataLoader(test_set, batch_size=opt.batch_size, shuffle=False)
+eval_set = dataset.get_dataset(train=False)
+eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
 model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads).cuda()
 optim = torch.optim.Adam(model.parameters(), lr=1e-4)
 
 start_train_datetime = datetime.now()
 start_train_time_str = str(start_train_datetime).split(" ")[0] + '_' + start_train_datetime.strftime("%H-%M-%S")
-current_checkpoint_dir = os.path.join("checkpoints", f"GSRNet_{start_train_time_str}")
+current_checkpoint_dir = os.path.join(opt.checkpoints_dir, f"GSRNet_{start_train_time_str}")
 print(f"Checkpoints saved in directory: {current_checkpoint_dir}")
 os.mkdir(current_checkpoint_dir)
 shutil.copy("opt.py", os.path.join(current_checkpoint_dir, "opt.txt"))
@@ -57,12 +57,12 @@ for epoch in range(1, opt.epochs+1):
     model.eval()
     with torch.no_grad():
         total_eval_loss = 0
-        for (batch_idx, data) in enumerate(test_loader):
+        for (batch_idx, data) in enumerate(eval_loader):
             lr, hr, guide = data["LR"].cuda(), data["HR"].cuda(), data["Guide"].cuda()
             pred_hr = model(lr, guide)
             loss = utils.calc_loss(pred_hr, hr)
             total_eval_loss += loss.item()
-        total_eval_loss /= test_loader.__len__()
+        total_eval_loss /= eval_loader.__len__()
         print(f"Epoch {epoch} Finished, Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:
