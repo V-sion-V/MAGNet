@@ -12,7 +12,9 @@ HR_image_size = (448, 640)
 batch_size = 2
 window_size = (7, 10)
 num_heads = 8
-cnn_norm = None
+num_channels_list = [32, 64, 128]
+num_conv_down_layers_list = [3, 3, 3]
+num_conv_up_layers_list = [3, 3, 3]
 
 # Loss
 pixel_loss_method = torch.nn.functional.mse_loss

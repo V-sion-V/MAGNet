@@ -1,4 +1,5 @@
 ﻿import os
+import sys
 import shutil
 import time
 from datetime import datetime
@@ -21,7 +22,7 @@ train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 eval_set = dataset.get_dataset(train=False)
 eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
-model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads).to(opt.gpu)
+model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_channels_list, opt.num_conv_down_layers_list ,opt.num_conv_up_layers_list).to(opt.gpu)
 optim = torch.optim.Adam(model.parameters(), lr=1e-4)
 
 start_train_datetime = datetime.now()
@@ -50,6 +51,7 @@ for epoch in range(1, opt.epochs+1):
         if batch_idx % batch_to_print == batch_to_print - 1:
             print(f"Epoch: {epoch}, {batch_idx * 1000 // train_loader.__len__() / 10:02.1f}%, "
                   f"Average Train Loss: {range_train_loss / batch_to_print:.16f}")
+            sys.stdout.flush()
             range_train_loss = 0
 
     total_train_loss /= train_loader.__len__()
@@ -70,10 +72,9 @@ for epoch in range(1, opt.epochs+1):
         total_eval_loss /= eval_loader.__len__()
         total_eval_psnr /= eval_loader.__len__()
         total_eval_ssim /= eval_loader.__len__()
-        print(f"Epoch {epoch} Finished")
+        print(f"Epoch {epoch} Finished:")
         print(f"Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
         print(f"Eval PSNR: {total_eval_psnr}, Eval SSIM: {total_eval_ssim}")
-        print("---------------------------------------------------------------------------------")
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:
         print(f"Epoch {epoch} model saved.")
