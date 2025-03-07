@@ -6,6 +6,8 @@ from datetime import datetime
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
+
+import dataset
 import opt
 import utils
 from dataset import GSRDataset
@@ -13,10 +15,10 @@ from model import GSRNet
 import matplotlib.pyplot as plt
 from PIL import Image
 
-train_set = GSRDataset(opt.train_dataset_path, opt.SR_factor)
+train_set = dataset.get_dataset(train=True)
 train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 
-test_set = GSRDataset(opt.test_dataset_path, opt.SR_factor)
+test_set = dataset.get_dataset(train=False)
 test_loader = DataLoader(test_set, batch_size=opt.batch_size, shuffle=False)
 
 model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads).cuda()
@@ -37,7 +39,7 @@ for epoch in range(1, opt.epochs+1):
         lr, hr, guide = data["LR"].cuda(), data["HR"].cuda(), data["Guide"].cuda()
         optim.zero_grad()
         pred_hr = model(lr, guide)
-        loss = utils.ssim_loss(pred_hr, hr)
+        loss = utils.calc_loss(pred_hr, hr)
         #print(loss.item())
         total_train_loss += loss.item()
         range_train_loss += loss.item()
@@ -46,8 +48,8 @@ for epoch in range(1, opt.epochs+1):
 
         batch_to_print = train_loader.__len__() // opt.print_loss_in_one_epoch
         if batch_idx % batch_to_print == batch_to_print - 1:
-            print(f"Epoch: {epoch}, {batch_idx * 1000 // train_loader.__len__() / 10}%, "
-                  f"Average Train Loss: {range_train_loss / batch_to_print}")
+            print(f"Epoch: {epoch}, {batch_idx * 1000 // train_loader.__len__() / 10:02.1f}%, "
+                  f"Average Train Loss: {range_train_loss / batch_to_print:.16f}")
             range_train_loss = 0
 
     total_train_loss /= train_loader.__len__()
@@ -58,7 +60,7 @@ for epoch in range(1, opt.epochs+1):
         for (batch_idx, data) in enumerate(test_loader):
             lr, hr, guide = data["LR"].cuda(), data["HR"].cuda(), data["Guide"].cuda()
             pred_hr = model(lr, guide)
-            loss = utils.ssim_loss(pred_hr, hr)
+            loss = utils.calc_loss(pred_hr, hr)
             total_eval_loss += loss.item()
         total_eval_loss /= test_loader.__len__()
         print(f"Epoch {epoch} Finished, Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")

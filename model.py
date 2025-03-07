@@ -119,8 +119,8 @@ class GSRNet(nn.Module):
         self.window_size = window_size
         self.num_head = num_head
 
-        self.conv_down_1_ir = ConvBlock(3, 64, 3, nn.BatchNorm2d(64))
-        self.conv_down_1_vi = ConvBlock(3, 64, 3, nn.BatchNorm2d(64))
+        self.conv_down_1_ir = ConvBlock(1, 64, 3, opt.cnn_norm)
+        self.conv_down_1_vi = ConvBlock(3, 64, 3, opt.cnn_norm)
 
         self.cross_attention_1 = WindowCrossAttention(window_size, 64, num_head)
         self.feed_forward_1_ir = FeedForward(64)
@@ -129,8 +129,8 @@ class GSRNet(nn.Module):
         self.feed_forward_2_ir = FeedForward(64)
         self.feed_forward_2_vi = FeedForward(64)
 
-        self.conv_up_1 = ConvBlock(128, 128, 3, nn.BatchNorm2d(128))
-        self.proj = nn.Conv2d(128, 3, 1, 1, 0)
+        self.conv_up_1 = ConvBlock(128, 128, 3, opt.cnn_norm)
+        self.proj = nn.Conv2d(128, 1, 1, 1, 0)
 
         total_params = sum(p.numel() for p in self.parameters())
         print(f"Initialized Model With {total_params} Parameters.")
