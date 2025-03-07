@@ -16,25 +16,30 @@ class GSRDataset(data.Dataset):
         self.hr_rgb_path = guide_dir
         self.lr_ir_path = lr_dir
 
-        self.file_name_list = os.listdir(self.hr_ir_path)
+        self.hr_ir_file_name_list = os.listdir(self.hr_ir_path)
+        self.hr_rgb_file_name_list = os.listdir(self.hr_rgb_path)
+        self.lr_ir_file_name_list = os.listdir(self.lr_ir_path)
+
+        assert(self.hr_ir_file_name_list.__len__() == self.hr_rgb_file_name_list.__len__())
+        assert(self.hr_ir_file_name_list.__len__() == self.lr_ir_file_name_list.__len__())
 
     def __getitem__(self, index):
         transform = torchvision.transforms.ToTensor()
 
-        hr_ir = cv2.imread(os.path.join(self.hr_ir_path, self.file_name_list[index]), cv2.IMREAD_GRAYSCALE)
+        hr_ir = cv2.imread(os.path.join(self.hr_ir_path, self.hr_ir_file_name_list[index]), cv2.IMREAD_GRAYSCALE)
         hr_ir = transform(hr_ir)
 
-        hr_rgb = cv2.imread(os.path.join(self.hr_rgb_path, self.file_name_list[index]))
+        hr_rgb = cv2.imread(os.path.join(self.hr_rgb_path, self.hr_rgb_file_name_list[index]))
         hr_rgb = cv2.cvtColor(hr_rgb, cv2.COLOR_BGR2RGB)
         hr_rgb = transform(hr_rgb)
 
-        lr_ir = cv2.imread(os.path.join(self.lr_ir_path, self.file_name_list[index]), cv2.IMREAD_GRAYSCALE)
+        lr_ir = cv2.imread(os.path.join(self.lr_ir_path, self.lr_ir_file_name_list[index]), cv2.IMREAD_GRAYSCALE)
         lr_ir = transform(lr_ir)
 
-        return {"Name": self.file_name_list[index], "LR":lr_ir, "Guide":hr_rgb, "HR":hr_ir}
+        return {"Name": self.lr_ir_file_name_list[index], "LR":lr_ir, "Guide":hr_rgb, "HR":hr_ir}
 
     def __len__(self):
-        return self.file_name_list.__len__()
+        return self.lr_ir_file_name_list.__len__()
 
 
 def get_dataset(train:bool):

@@ -21,7 +21,7 @@ train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 eval_set = dataset.get_dataset(train=False)
 eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
-model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads).cuda()
+model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads).to(opt.gpu)
 optim = torch.optim.Adam(model.parameters(), lr=1e-4)
 
 start_train_datetime = datetime.now()
@@ -36,7 +36,7 @@ for epoch in range(1, opt.epochs+1):
     total_train_loss = 0
     range_train_loss = 0
     for (batch_idx, data) in enumerate(train_loader):
-        lr, hr, guide = data["LR"].cuda(), data["HR"].cuda(), data["Guide"].cuda()
+        lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
         optim.zero_grad()
         pred_hr = model(lr, guide)
         loss = utils.calc_loss(pred_hr, hr)
@@ -57,13 +57,23 @@ for epoch in range(1, opt.epochs+1):
     model.eval()
     with torch.no_grad():
         total_eval_loss = 0
+        total_eval_psnr = 0
+        total_eval_ssim = 0
         for (batch_idx, data) in enumerate(eval_loader):
-            lr, hr, guide = data["LR"].cuda(), data["HR"].cuda(), data["Guide"].cuda()
+            lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
             pred_hr = model(lr, guide)
             loss = utils.calc_loss(pred_hr, hr)
             total_eval_loss += loss.item()
+            total_eval_psnr += utils.psnr(pred_hr, hr).item()
+            total_eval_ssim += utils.ssim(pred_hr, hr).item()
+
         total_eval_loss /= eval_loader.__len__()
-        print(f"Epoch {epoch} Finished, Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
+        total_eval_psnr /= eval_loader.__len__()
+        total_eval_ssim /= eval_loader.__len__()
+        print(f"Epoch {epoch} Finished")
+        print(f"Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
+        print(f"Eval PSNR: {total_eval_psnr}, Eval SSIM: {total_eval_ssim}")
+        print("---------------------------------------------------------------------------------")
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:
         print(f"Epoch {epoch} model saved.")

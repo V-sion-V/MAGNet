@@ -33,7 +33,7 @@ def half_window_shift (x:torch.Tensor, window_size:tuple, reverse:bool): #[B, C,
     else:
         return torch.roll(x, shifts=(window_height//2, window_width//2), dims=(2, 3))
 
-ssim = torchmetrics.image.StructuralSimilarityIndexMeasure().cuda()
+ssim = torchmetrics.image.StructuralSimilarityIndexMeasure().to(opt.gpu)
 def ssim_loss (x:torch.Tensor, y:torch.Tensor):
     return 1 - ssim(x, y)
 
@@ -46,7 +46,7 @@ def gradient_loss (x:torch.Tensor, y:torch.Tensor):
     return loss_x + loss_y
 
 def calc_loss (pred:torch.Tensor, target:torch.Tensor):
-    return (opt.l1_loss_weight * nn.functional.l1_loss(pred, target) +
+    return (opt.pixel_loss_weight * opt.pixel_loss_method(pred, target) +
             opt.ssim_loss_weight * ssim_loss(pred, target) +
             opt.gradient_loss_weight * gradient_loss(pred, target))
 

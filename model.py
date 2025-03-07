@@ -85,12 +85,12 @@ class FeedForward(nn.Module):
         self.norm = nn.LayerNorm(num_channels)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = F.gelu(x)
-        x = self.fc2(x)
-        x = self.dropout(x)
-        x = self.norm(x)
-        return x
+        y = self.fc1(x)
+        y = F.gelu(y)
+        y = self.fc2(y)
+        y = self.dropout(y)
+        y = self.norm(y+x)
+        return y
 
 class ConvBlock(nn.Module):
     def __init__(self, num_channels_in:int, num_channels_hidden:int, num_layers:int, norm_layer:nn.Module=None):
@@ -136,6 +136,7 @@ class GSRNet(nn.Module):
 
     def forward(self, x:torch.Tensor, y:torch.Tensor):
         x = F.interpolate(x, y.shape[-2:], mode='bilinear', align_corners=False)
+        res1 = x
         x = self.conv_down_1_ir(x)
         y = self.conv_down_1_vi(y)
 
@@ -168,8 +169,9 @@ class GSRNet(nn.Module):
         z = torch.concat((x, y), dim=1)
 
         z = self.conv_up_1(z)
-        z = self.proj(z)
+        z = self.proj(z) + res1
 
+        z = torch.nn.functional.sigmoid(z)
         return z
 
 
