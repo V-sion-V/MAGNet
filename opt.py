@@ -12,9 +12,10 @@ HR_image_size = (448, 640)
 batch_size = 2
 window_size = (7, 10)
 num_heads = 8
-num_channels_list = [32, 64, 128]
+num_channels_list = [64, 128, 256]
 num_conv_down_layers_list = [3, 3, 3]
 num_conv_up_layers_list = [3, 3, 3]
+dropout = 0.5
 
 # Loss
 pixel_loss_method = torch.nn.functional.mse_loss
@@ -29,9 +30,9 @@ save_model_epoch = 1
 checkpoints_dir = 'checkpoints'
 
 # Device
-gpu = torch.device('cuda:1')
+gpu = torch.device('cuda:0') # Set to cuda:0 in DataParallel
 
 # Eval
 test_batch_size = 4
 output_dir = 'output'
-checkpoint_path = "./checkpoints/GSRNet_2025-03-07_22-04-11/model50.pth"
+checkpoint_path = "./checkpoints/GSRNet_2025-03-08_04-05-41/model28.pth"

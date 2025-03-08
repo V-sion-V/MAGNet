@@ -13,7 +13,7 @@ from model import GSRNet
 eval_set = dataset.get_dataset(train=False)
 eval_loader = DataLoader(eval_set, batch_size=opt.test_batch_size, shuffle=False)
 
-model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads).to(opt.gpu)
+model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_channels_list, opt.num_conv_down_layers_list, opt.num_conv_up_layers_list).to(opt.gpu)
 model.load_state_dict(torch.load(opt.checkpoint_path))
 
 model.eval()

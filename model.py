@@ -32,7 +32,7 @@ class WindowCrossAttention(nn.Module):
 
         self.norm1 = nn.LayerNorm(num_channels)
         self.norm2 = nn.LayerNorm(num_channels)
-
+        
         if num_channels // num_heads != num_channels / num_heads:
             raise ValueError("Number of channels must be divisible by number of heads.")
 
@@ -151,7 +151,7 @@ class ConvBlock(nn.Module):
 
 class GSRNet(nn.Module):
     def __init__(self, image_size:tuple[2], window_size:tuple[2], num_head:int,
-                 num_channels_list:list[int], num_conv_down_layers_list:list[int], num_conv_up_layers_list:list[int]):
+                 num_channels_list:list[int], num_conv_down_layers_list:list[int], num_conv_up_layers_list:list[int], dropout:float):
         super().__init__()
         self.image_size = image_size
         self.window_size = window_size
@@ -172,9 +172,9 @@ class GSRNet(nn.Module):
         self.max_pool_vi_2_3 = nn.MaxPool2d(2, 2)
         self.conv_down_vi_3 = ConvBlock(num_channels_list[1], num_channels_list[2], num_conv_down_layers_list[2])
 
-        self.cross_attention_1 = CrossAttentionBlock(window_size, num_channels_list[0], num_head)
-        self.cross_attention_2 = CrossAttentionBlock(window_size, num_channels_list[1], num_head)
-        self.cross_attention_3 = CrossAttentionBlock(window_size, num_channels_list[2], num_head)
+        self.cross_attention_1 = CrossAttentionBlock(window_size, num_channels_list[0], num_head, dropout=dropout)
+        self.cross_attention_2 = CrossAttentionBlock(window_size, num_channels_list[1], num_head, dropout=dropout)
+        self.cross_attention_3 = CrossAttentionBlock(window_size, num_channels_list[2], num_head, dropout=dropout)
 
         self.conv_up_3 = ConvBlock(2 * num_channels_list[2], 2 * num_channels_list[2], num_conv_up_layers_list[2])
         self.up_sample_3_2 = nn.ConvTranspose2d(2 * num_channels_list[2], 2* num_channels_list[1], 2, 2)

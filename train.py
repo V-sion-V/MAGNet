@@ -22,7 +22,10 @@ train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 eval_set = dataset.get_dataset(train=False)
 eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
-model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_channels_list, opt.num_conv_down_layers_list ,opt.num_conv_up_layers_list).to(opt.gpu)
+model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_channels_list, opt.num_conv_down_layers_list ,opt.num_conv_up_layers_list, opt.dropout)
+if torch.cuda.device_count() > 1:
+    model = torch.nn.DataParallel(model)
+model.to(opt.gpu)
 optim = torch.optim.Adam(model.parameters(), lr=1e-4)
 
 start_train_datetime = datetime.now()
