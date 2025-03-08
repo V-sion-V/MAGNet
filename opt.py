@@ -11,15 +11,16 @@ HR_image_size = (448, 640)
 # Model
 batch_size = 2
 window_size = (7, 10)
-num_heads = 8
-num_channels_list = [64, 128, 256]
-num_conv_down_layers_list = [3, 3, 3]
-num_conv_up_layers_list = [3, 3, 3]
+num_heads = 4
+num_channels_list = [64, 128, 256, 512]
+num_conv_down_layers_list = [4, 4, 3, 3]
+num_conv_up_layers_list = [3, 3, 3, 3]
 dropout = 0.5
+upsample_mode = 'conv_transpose' # 'conv_transpose' or 'bilinear'
 
 # Loss
 pixel_loss_method = torch.nn.functional.mse_loss
-pixel_loss_weight = 0.8
+pixel_loss_weight = 1.0
 ssim_loss_weight = 0.1
 gradient_loss_weight = 0.1
 

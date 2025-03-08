@@ -151,7 +151,8 @@ class ConvBlock(nn.Module):
 
 class GSRNet(nn.Module):
     def __init__(self, image_size:tuple[2], window_size:tuple[2], num_head:int,
-                 num_channels_list:list[int], num_conv_down_layers_list:list[int], num_conv_up_layers_list:list[int], dropout:float):
+                 num_channels_list:list[int], num_conv_down_layers_list:list[int], num_conv_up_layers_list:list[int], 
+                 dropout:float, upsample_mode:str):
         super().__init__()
         self.image_size = image_size
         self.window_size = window_size
@@ -159,74 +160,84 @@ class GSRNet(nn.Module):
         self.num_channels_list = num_channels_list
         self.num_conv_down_layers_list = num_conv_down_layers_list
         self.num_conv_up_layers_list = num_conv_up_layers_list
+        self.upsample_mode = upsample_mode
+        self.num_unet_layers = len(num_channels_list)
 
-        self.conv_down_ir_1 = ConvBlock(1, num_channels_list[0], num_conv_down_layers_list[0])
-        self.max_pool_ir_1_2 = nn.MaxPool2d(2, 2)
-        self.conv_down_ir_2 = ConvBlock(num_channels_list[0], num_channels_list[1], num_conv_down_layers_list[1])
-        self.max_pool_ir_2_3 = nn.MaxPool2d(2, 2)
-        self.conv_down_ir_3 = ConvBlock(num_channels_list[1], num_channels_list[2], num_conv_down_layers_list[2])
+        assert len(num_channels_list) == len(num_conv_down_layers_list) == len(num_conv_up_layers_list)
         
-        self.conv_down_vi_1 = ConvBlock(3, num_channels_list[0], num_conv_down_layers_list[0])
-        self.max_pool_vi_1_2 = nn.MaxPool2d(2, 2)
-        self.conv_down_vi_2 = ConvBlock(num_channels_list[0], num_channels_list[1], num_conv_down_layers_list[1])
-        self.max_pool_vi_2_3 = nn.MaxPool2d(2, 2)
-        self.conv_down_vi_3 = ConvBlock(num_channels_list[1], num_channels_list[2], num_conv_down_layers_list[2])
+        self.top_down_conv_ir = ConvBlock(1, num_channels_list[0], num_conv_down_layers_list[0])
+        self.down_max_pool_list_ir = nn.ModuleList()
+        for i in range(1, self.num_unet_layers):
+            self.down_max_pool_list_ir.append(nn.MaxPool2d(2, 2))
+        self.down_conv_list_ir = nn.ModuleList()
+        for i in range(1, self.num_unet_layers):
+            self.down_conv_list_ir.append(ConvBlock(num_channels_list[i-1], num_channels_list[i], num_conv_down_layers_list[i]))
 
-        self.cross_attention_1 = CrossAttentionBlock(window_size, num_channels_list[0], num_head, dropout=dropout)
-        self.cross_attention_2 = CrossAttentionBlock(window_size, num_channels_list[1], num_head, dropout=dropout)
-        self.cross_attention_3 = CrossAttentionBlock(window_size, num_channels_list[2], num_head, dropout=dropout)
-
-        self.conv_up_3 = ConvBlock(2 * num_channels_list[2], 2 * num_channels_list[2], num_conv_up_layers_list[2])
-        self.up_sample_3_2 = nn.ConvTranspose2d(2 * num_channels_list[2], 2* num_channels_list[1], 2, 2)
-        self.conv_up_2 = ConvBlock(4 * num_channels_list[1], 2 * num_channels_list[1], num_conv_up_layers_list[1])
-        self.up_sample_2_1 = nn.ConvTranspose2d(2 * num_channels_list[1], 2* num_channels_list[0], 2, 2)
-        self.conv_up_1 = ConvBlock(4 * num_channels_list[0], 2 * num_channels_list[0], num_conv_up_layers_list[0])
+        self.top_down_conv_vi = ConvBlock(3, num_channels_list[0], num_conv_down_layers_list[0])
+        self.down_max_pool_list_vi = nn.ModuleList()
+        for i in range(1, self.num_unet_layers):
+            self.down_max_pool_list_vi.append(nn.MaxPool2d(2, 2))
+        self.down_conv_list_vi = nn.ModuleList()
+        for i in range(1, self.num_unet_layers):
+            self.down_conv_list_vi.append(ConvBlock(num_channels_list[i-1], num_channels_list[i], num_conv_down_layers_list[i]))
         
-        self.proj = nn.Conv2d(2 * num_channels_list[0], 1, kernel_size=1, stride=1, padding=0)
+        self.cross_attention_blocks = nn.ModuleList()
+        for i in range(self.num_unet_layers):
+            self.cross_attention_blocks.append(CrossAttentionBlock(window_size, num_channels_list[i], num_head, dropout=dropout))
+        
+        self.bottom_up_conv = ConvBlock(num_channels_list[-1], num_channels_list[-1], num_conv_up_layers_list[-1])
+        self.up_sample_list = nn.ModuleList()
+        for i in range(self.num_unet_layers-2, -1, -1):
+            self.up_sample_list.append(self.get_upsample_layer(num_channels_list[i+1], num_channels_list[i]))
+        self.up_conv_list = nn.ModuleList()
+        for i in range(self.num_unet_layers-2, -1, -1):
+            self.up_conv_list.append(ConvBlock(2 * num_channels_list[i], num_channels_list[i], num_conv_up_layers_list[i]))
+        
+        self.proj = nn.Conv2d(num_channels_list[0], 1, kernel_size=1, stride=1, padding=0)
 
         total_params = sum(p.numel() for p in self.parameters())
         print(f"Initialized Model With {total_params} Parameters.")
+
+    def get_upsample_layer(self, num_channels_in:int, num_channels_out:int):
+        if self.upsample_mode == 'conv_transpose':
+            return nn.ConvTranspose2d(num_channels_in, num_channels_out, 2, 2)
+        elif self.upsample_mode == 'bilinear':
+            return nn.Sequential([nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                                  nn.Conv2d(num_channels_in, num_channels_out, 1, 1, 0)])
+        else:
+            raise ValueError("Upsample mode must be 'bilinear' or 'conv_transpose'.")
 
     def forward(self, x:torch.Tensor, y:torch.Tensor):
         x = F.interpolate(x, y.shape[-2:], mode='bilinear', align_corners=False)
         original_x = x
         
-        x = self.conv_down_ir_1(x)        
-        y = self.conv_down_vi_1(y)
-
-        res1 = torch.concat(self.cross_attention_1(x, y), dim=1)
+        # Downward path
+        x = self.top_down_conv_ir(x)
+        y = self.top_down_conv_vi(y)
         
-        x = self.max_pool_ir_1_2(x)
-        y = self.max_pool_vi_1_2(y)
+        res_list = []
+        for i in range(self.num_unet_layers-1):
+            res_x, res_y = self.cross_attention_blocks[i](x, y)
+            res_list.append(torch.max(res_x, res_y))
+            x = self.down_max_pool_list_ir[i](x)
+            y = self.down_max_pool_list_vi[i](y)
+            x = self.down_conv_list_ir[i](x)
+            y = self.down_conv_list_vi[i](y)
         
-        x = self.conv_down_ir_2(x)
-        y = self.conv_down_vi_2(y)
+        res_x, res_y = self.cross_attention_blocks[-1](x, y)
+        z = torch.max(res_x, res_y)
         
-        res2 = torch.concat(self.cross_attention_2(x, y), dim=1)
+        # Upward path
+        z = self.bottom_up_conv(z)
         
-        x = self.max_pool_ir_2_3(x)
-        y = self.max_pool_vi_2_3(y)
+        for i in range(self.num_unet_layers-1):
+            z = self.up_sample_list[i](z)
+            z = torch.cat([z, res_list[-i-1]], dim=1)
+            z = self.up_conv_list[i](z)
         
-        x = self.conv_down_ir_3(x)
-        y = self.conv_down_vi_3(y)
+        z = self.proj(z)
+        z = torch.nn.functional.tanh(z)
         
-        z = torch.concat(self.cross_attention_3(x, y), dim=1)
-
-        z = self.conv_up_3(z)
-        
-        z = self.up_sample_3_2(z)
-        z = torch.concat([z, res2], dim=1)
-        
-        z = self.conv_up_2(z)
-        
-        z = self.up_sample_2_1(z)
-        z = torch.concat([z, res1], dim=1)
-        
-        z = self.conv_up_1(z)
-        
-        z = self.proj(z) + original_x
-
-        z = torch.nn.functional.sigmoid(z)
-        return z
+        return original_x + z
 
 
