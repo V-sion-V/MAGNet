@@ -69,6 +69,7 @@ for epoch in range(1, opt.epochs+1):
         for (batch_idx, data) in enumerate(eval_loader):
             lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
             pred_hr = model(lr, guide)
+            pred_hr = torch.clamp(pred_hr, 0, 1)
             loss = utils.calc_loss(pred_hr, hr)
             total_eval_loss += loss.item()
             total_eval_psnr += utils.psnr(pred_hr, hr).item()
@@ -78,7 +79,7 @@ for epoch in range(1, opt.epochs+1):
         total_eval_psnr /= eval_loader.__len__()
         total_eval_ssim /= eval_loader.__len__()
         print(f"Epoch {epoch} Finished:")
-        print(f"Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
+        print(f"Total Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
         print(f"Eval PSNR: {total_eval_psnr}, Eval SSIM: {total_eval_ssim}")
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:

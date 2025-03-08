@@ -33,7 +33,7 @@ def half_window_shift (x:torch.Tensor, window_size:tuple, reverse:bool): #[B, C,
     else:
         return torch.roll(x, shifts=(window_height//2, window_width//2), dims=(2, 3))
 
-ssim = torchmetrics.image.StructuralSimilarityIndexMeasure().to(opt.gpu)
+ssim = torchmetrics.image.StructuralSimilarityIndexMeasure(data_range=1.0).to(opt.gpu)
 def ssim_loss (x:torch.Tensor, y:torch.Tensor):
     return 1 - ssim(x, y)
 
@@ -46,9 +46,14 @@ def gradient_loss (x:torch.Tensor, y:torch.Tensor):
     return loss_x + loss_y
 
 def calc_loss (pred:torch.Tensor, target:torch.Tensor):
-    return (opt.pixel_loss_weight * opt.pixel_loss_method(pred, target) +
-            opt.ssim_loss_weight * ssim_loss(pred, target) +
-            opt.gradient_loss_weight * gradient_loss(pred, target))
+    loss = torch.zeros(1, device=opt.gpu)
+    if opt.pixel_loss_weight > 0:
+        loss += opt.pixel_loss_weight * opt.pixel_loss_method(pred, target)
+    if opt.ssim_loss_weight > 0:
+        loss += opt.ssim_loss_weight * ssim_loss(pred, target)
+    if opt.gradient_loss_weight > 0:
+        loss += opt.gradient_loss_weight * gradient_loss(pred, target)
+    return loss
 
 def psnr(pred:torch.Tensor, target:torch.Tensor, max_val=1.0):
     mse = nn.functional.mse_loss(pred, target, reduction='mean')
