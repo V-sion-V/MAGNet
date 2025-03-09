@@ -13,8 +13,8 @@ batch_size = 2
 window_size = (7, 10)
 num_heads = 4
 num_channels_list = [64, 128, 256, 512]
-num_conv_down_layers_list = [2, 2, 2, 2]
-num_conv_up_layers_list = [2, 2, 2, 2]
+num_conv_down_layers_list = [4, 4, 3, 3]
+num_conv_up_layers_list = [3, 3, 3, 3]
 dropout = 0.5
 upsample_mode = 'conv_transpose' # 'conv_transpose' or 'bilinear'
 
