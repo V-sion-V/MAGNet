@@ -1,34 +1,32 @@
 ﻿import os
 import sys
 import shutil
-import time
 from datetime import datetime
 
 import torch
-import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
-import dataset
+from main import dataset, utils
 import opt
-import utils
-from dataset import GSRDataset
-from model import GSRNet
-import matplotlib.pyplot as plt
-from PIL import Image
+from main.model import GSRNet
 
-train_set = dataset.get_dataset(train=True)
+from tensorboardX import SummaryWriter
+import torchvision.utils as vutils
+
+train_set = dataset.get_dataset(mode='train', progressive=opt.progressive, start_scale=opt.start_scale)
 train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 
-eval_set = dataset.get_dataset(train=False)
+eval_set = dataset.get_dataset(mode='eval', progressive=opt.progressive, start_scale=opt.start_scale)
 eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
-model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads,
+model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_attention_layers,
                opt.num_channels_list, opt.num_conv_down_layers_list, opt.num_conv_up_layers_list, 
                opt.dropout, opt.upsample_mode)
 if torch.cuda.device_count() > 1:
     model = torch.nn.DataParallel(model)
 model.to(opt.gpu)
-optim = torch.optim.Adam(model.parameters(), lr=1e-4)
+optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)
+scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=opt.lr_decay_step, gamma=opt.lr_decay_rate)
 
 start_train_datetime = datetime.now()
 start_train_time_str = str(start_train_datetime).split(" ")[0] + '_' + start_train_datetime.strftime("%H-%M-%S")
@@ -36,6 +34,8 @@ current_checkpoint_dir = os.path.join(opt.checkpoints_dir, f"GSRNet_{start_train
 print(f"Checkpoints saved in directory: {current_checkpoint_dir}")
 os.mkdir(current_checkpoint_dir)
 shutil.copy("opt.py", os.path.join(current_checkpoint_dir, "opt.txt"))
+
+writer = SummaryWriter(logdir=os.path.join(opt.tensorboard_log_dir, f"GSRNet_{start_train_time_str}"))
 
 for epoch in range(1, opt.epochs+1):
     model.train()
@@ -45,12 +45,14 @@ for epoch in range(1, opt.epochs+1):
         lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
         optim.zero_grad()
         pred_hr = model(lr, guide)
+        pred_hr = torch.clamp(pred_hr, 0, 1)
         loss = utils.calc_loss(pred_hr, hr)
-        #print(loss.item())
         total_train_loss += loss.item()
         range_train_loss += loss.item()
         loss.backward()
         optim.step()
+
+        writer.add_scalar(f'Train/BatchLoss', loss.item(), (epoch-1) * train_loader.__len__() + batch_idx)
 
         batch_to_print = train_loader.__len__() // opt.print_loss_in_one_epoch
         if batch_idx % batch_to_print == batch_to_print - 1:
@@ -60,6 +62,7 @@ for epoch in range(1, opt.epochs+1):
             range_train_loss = 0
 
     total_train_loss /= train_loader.__len__()
+    scheduler.step()
 
     model.eval()
     with torch.no_grad():
@@ -75,12 +78,20 @@ for epoch in range(1, opt.epochs+1):
             total_eval_psnr += utils.psnr(pred_hr, hr).item()
             total_eval_ssim += utils.ssim(pred_hr, hr).item()
 
+            for i in range(opt.batch_size):
+                writer.add_image(f"Eval/Predict{data['Name'][i]}", pred_hr[i], epoch)
+
         total_eval_loss /= eval_loader.__len__()
         total_eval_psnr /= eval_loader.__len__()
         total_eval_ssim /= eval_loader.__len__()
         print(f"Epoch {epoch} Finished:")
         print(f"Total Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
         print(f"Eval PSNR: {total_eval_psnr}, Eval SSIM: {total_eval_ssim}")
+
+        writer.add_scalar(f'Train/TotalLoss', total_train_loss, epoch)
+        writer.add_scalar(f'Eval/TotalLoss', total_eval_loss, epoch)
+        writer.add_scalar(f'Eval/PSNR', total_eval_psnr, epoch)
+        writer.add_scalar(f'Eval/SSIM', total_eval_ssim, epoch)
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:
         print(f"Epoch {epoch} model saved.")

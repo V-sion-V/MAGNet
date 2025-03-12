@@ -13,7 +13,7 @@ def find_after_string_in_file(filename, search_string):
     return data_list
 
 # 示例：查找 "hello" 在 "example.txt" 文件中的所有位置
-file_path = "../log/train_log_2025-03-08_20-44-41.log"
+file_path = "../log/train_log_2025-03-10_19-33-08.log"
 
 eval_psnr_list = find_after_string_in_file(file_path, 'Eval PSNR: ')
 eval_ssim_list = find_after_string_in_file(file_path, 'Eval SSIM: ')

@@ -9,8 +9,7 @@ import opt
 def window_partition (x:torch.Tensor, window_size:tuple): #[B, C, H, W] -> [B_, N, C]
     B, C, H, W = x.shape
     window_height, window_width = window_size
-    if H % window_height != 0 or W % window_width != 0:
-        raise ValueError("Image height and width must be divisible by window height and width.")
+    assert H % window_height == 0 and W % window_width == 0, "Image height and width must be divisible by window height and width."
     x = x.view(B, C, H // window_height, window_height, W // window_width, window_width)
     x = x.permute(0, 2, 4, 3, 5, 1).reshape(-1, window_height * window_width, C)
     return x
@@ -23,15 +22,16 @@ def window_merge (x:torch.Tensor, window_size:tuple, image_size:tuple): #[B_, N,
     x = x.permute(0, 5, 1, 3, 2, 4).reshape(-1, C, image_height, image_width)
     return x
 
-def half_window_shift (x:torch.Tensor, window_size:tuple, reverse:bool): #[B, C, H, W] -> [B, C, H, W]
+def half_window_shift (x:torch.Tensor, window_size:tuple, direction:str): #[B, C, H, W] -> [B, C, H, W]
     B, C, H, W = x.shape
     window_height, window_width = window_size
-    if H % window_height != 0 or W % window_width != 0:
-        raise ValueError("Image height and width must be divisible by window height and width.")
-    if reverse:
+    assert H % window_height == 0 and W % window_width == 0, "Image height and width must be divisible by window height and width."
+    if direction == 'forward':
         return torch.roll(x, shifts=(-window_height//2, -window_width//2), dims=(2, 3))
-    else:
+    elif direction == 'backward':
         return torch.roll(x, shifts=(window_height//2, window_width//2), dims=(2, 3))
+    else:
+        raise ValueError('Direction must be either "forward" or "backward".')
 
 ssim = torchmetrics.image.StructuralSimilarityIndexMeasure(data_range=1.0).to(opt.gpu)
 def ssim_loss (x:torch.Tensor, y:torch.Tensor):
