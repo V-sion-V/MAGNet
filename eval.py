@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from main import dataset, utils
 import opt
-from main.model import GSRNet
+from main.model import get_model
 
 batch_size = 1
 output_dir = "./output"
@@ -16,9 +16,7 @@ eval_set = dataset.get_dataset(mode='eval')
 eval_loader = DataLoader(eval_set, batch_size=batch_size, shuffle=False)
 
 def load_model(ckpt_path):
-    model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_attention_layers,
-                opt.num_channels_list, opt.num_conv_down_layers_list, opt.num_conv_up_layers_list, 
-                opt.dropout, opt.upsample_mode).to(opt.gpu)
+    model = get_model(opt.model_name)
 
     checkpoint = torch.load(ckpt_path, map_location=opt.gpu)
     new_state_dict = {}

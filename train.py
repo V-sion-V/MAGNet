@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from main import dataset, utils
 import opt
-from main.model import GSRNet
+from main.model import get_model
 
 from tensorboardX import SummaryWriter
 import torchvision.utils as vutils
@@ -19,9 +19,7 @@ train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
 eval_set = dataset.get_dataset(mode='eval', progressive=opt.progressive, start_scale=opt.start_scale)
 eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
-model = GSRNet(opt.HR_image_size, opt.window_size, opt.num_heads, opt.num_attention_layers,
-               opt.num_channels_list, opt.num_conv_down_layers_list, opt.num_conv_up_layers_list, 
-               opt.dropout, opt.upsample_mode)
+model = get_model(opt.model_name)
 if torch.cuda.device_count() > 1:
     model = torch.nn.DataParallel(model)
 model.to(opt.gpu)
