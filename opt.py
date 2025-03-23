@@ -1,25 +1,25 @@
 ﻿import torch
 
 # Data
-train_dataset_path = './dataset/train'
-eval_dataset_path = './dataset/val'
-lr_dir_name = 'thermal/LR_x8'
-guide_dir_name = 'visible'
-hr_dir_name = 'thermal/GT'
-HR_image_size = (448, 640)
+train_dataset_path = 'dataset/VGTSR/train'
+eval_dataset_path = 'dataset/VGTSR/eval'
+lr_dir_name = 'LR thermal/8/BI'
+guide_dir_name = 'HR RGB'
+hr_dir_name = 'GT thermal'
+HR_image_size = (512, 640)
 
 # Model
 model_name = 'GSRNet'
 batch_size = 2
-window_size = (7, 10)
-num_self_attention_layers = 2
-num_cross_attention_layers = 2
-num_reconstruction_layers = 2
-num_head_list = [6]
-num_channels_list = [60]
-num_conv_down_layers_list = [2]
-num_conv_up_layers_list = [2]
-dropout = 0
+window_size = (8, 10)
+num_self_attention_layers = 0
+num_cross_attention_layers = 1
+num_reconstruction_layers = 0
+num_head_list = [4, 8, 16, 32]
+num_channels_list = [64, 128, 256, 512]
+num_conv_down_layers_list = [2, 2, 2, 2]
+num_conv_up_layers_list = [2, 2, 2, 2]
+dropout = 0.0
 upsample_mode = 'bicubic' # 'conv_transpose' or 'bicubic'
 
 # Loss
@@ -29,7 +29,7 @@ ssim_loss_weight = 0.1
 gradient_loss_weight = 0.1
 
 # Train
-learning_rate = 0.0004
+learning_rate = 0.0001
 epochs = 200
 print_loss_in_one_epoch = 20
 save_model_epoch = 1
@@ -37,8 +37,9 @@ checkpoints_dir = 'checkpoints'
 progressive = False
 start_scale = 1
 tensorboard_log_dir = 'tensorboard_log'
-lr_decay_step = 24
+lr_decay_step = 16
 lr_decay_rate = 0.5
+data_parallel = True
 
 # Device
 gpu = torch.device('cuda:0') # Set to cuda:0 in DataParallel

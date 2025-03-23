@@ -4,6 +4,7 @@ import shutil
 from datetime import datetime
 
 import torch
+import torchvision.utils
 from torch.utils.data import DataLoader
 
 from main import dataset, utils
@@ -20,7 +21,7 @@ eval_set = dataset.get_dataset(mode='eval', progressive=opt.progressive, start_s
 eval_loader = DataLoader(eval_set, batch_size=opt.batch_size, shuffle=False)
 
 model = get_model(opt.model_name)
-if torch.cuda.device_count() > 1:
+if torch.cuda.device_count() > 1 and opt.data_parallel:
     model = torch.nn.DataParallel(model)
 model.to(opt.gpu)
 optim = torch.optim.Adam(model.parameters(), lr=opt.learning_rate)

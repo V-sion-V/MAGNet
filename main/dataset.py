@@ -19,9 +19,9 @@ class GSRDataset(data.Dataset):
         self.progressive = progressive
         self.start_scale = start_scale
 
-        self.hr_ir_file_name_list = os.listdir(self.hr_ir_path)
-        self.hr_rgb_file_name_list = os.listdir(self.hr_rgb_path)
-        self.lr_ir_file_name_list = os.listdir(self.lr_ir_path)
+        self.hr_ir_file_name_list = sorted(os.listdir(self.hr_ir_path))
+        self.hr_rgb_file_name_list = sorted(os.listdir(self.hr_rgb_path))
+        self.lr_ir_file_name_list = sorted(os.listdir(self.lr_ir_path))
 
         assert(self.hr_ir_file_name_list.__len__() == self.hr_rgb_file_name_list.__len__())
         assert(self.hr_ir_file_name_list.__len__() == self.lr_ir_file_name_list.__len__())

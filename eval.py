@@ -30,7 +30,7 @@ def load_model(ckpt_path):
     
     return model
 
-model = load_model("./checkpoints/GSRNet_2025-03-12_13-48-49/model21.pth")
+model = load_model("checkpoints/GSRNet_2025-03-18_14-15-56/model35.pth")
 
 total_ssim = 0
 total_psnr = 0
