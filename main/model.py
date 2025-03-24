@@ -43,7 +43,7 @@ class WindowSelfAttention(nn.Module):
         if num_channels // num_heads != num_channels / num_heads:
             raise ValueError("Number of channels must be divisible by number of heads.")
 
-    def forward(self, x, mask=None):
+    def forward(self, x):
         # B_ = batch size * window count, N = window element count, C = number of channels
         B_, N, C = x.shape
         assert C == self.num_channels, "Number of channels must match."
@@ -52,23 +52,13 @@ class WindowSelfAttention(nn.Module):
         qkv = self.w_qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        attn = (q @ k.transpose(-2, -1)) / self.num_channels ** 0.5  # [B_, num_heads, window element count, window element count]
-
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
 
-        attn += relative_position_bias.unsqueeze(0)
-
-        if mask is not None:  # [num_windows, window element count, window element count]
-            nW = mask.shape[0]
-            attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-
-        attn = attn.softmax(dim=-1)
-
         # [B_, num_heads, window element count, channel in head] -> [B_, window element count, num_heads, channel in head]
-        out = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+        out = nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=relative_position_bias.unsqueeze(0))
+        out = out.transpose(1, 2).reshape(B_, N, C)
 
         out= self.proj(out)
 
@@ -119,7 +109,7 @@ class WindowCrossAttention(nn.Module):
         if num_channels // num_heads != num_channels / num_heads:
             raise ValueError("Number of channels must be divisible by number of heads.")
 
-    def forward(self, x, y, mask=None):
+    def forward(self, x, y):
         # B_ = batch size * window count, N = window element count, C = number of channels
         B_, N, C = x.shape
         _B_, _N, _C = y.shape
@@ -131,23 +121,13 @@ class WindowCrossAttention(nn.Module):
         ky = self.w_ky(y).reshape(B_, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
         vy = self.w_vy(y).reshape(B_, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
-        attn = (qx @ ky.transpose(-2, -1)) / self.num_channels ** 0.5 # [B_, num_heads, window element count, window element count]
-
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
 
-        attn += relative_position_bias.unsqueeze(0)
-
-        if mask is not None: # [num_windows, window element count, window element count]
-            nW = mask.shape[0]
-            attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-
-        attn = attn.softmax(dim=-1)
-
         # [B_, num_heads, window element count, channel in head] -> [B_, window element count, num_heads, channel in head]
-        out = (attn @ vy).transpose(1, 2).reshape(B_, N, C)
+        out = nn.functional.scaled_dot_product_attention(qx, ky, vy, attn_mask=relative_position_bias.unsqueeze(0))
+        out = out.transpose(1, 2).reshape(B_, N, C)
 
         out = self.proj(out)
 
@@ -323,7 +303,7 @@ class GSRNet(nn.Module):
     def __init__(self, image_size:tuple[2], window_size:tuple[2], num_head_list:list[int],
                  num_self_attention_layers:int, num_cross_attention_layers:int, num_reconstruction_layers:int,
                  num_channels_list:list[int], num_conv_down_layers_list:list[int], num_conv_up_layers_list:list[int], 
-                 dropout:float, upsample_mode:str):
+                 dropout:float, upsample_mode:str, num_thermal_channels:int):
         super().__init__()
         self.image_size = image_size
         self.window_size = window_size
@@ -339,7 +319,7 @@ class GSRNet(nn.Module):
 
         assert len(num_channels_list) == len(num_conv_down_layers_list) == len(num_conv_up_layers_list)
         
-        self.top_down_conv_ir = ConvBlock(1, num_channels_list[0], num_conv_down_layers_list[0])
+        self.top_down_conv_ir = ConvBlock(num_thermal_channels, num_channels_list[0], num_conv_down_layers_list[0])
         self.down_max_pool_list_ir = nn.ModuleList()
         for i in range(1, self.num_unet_layers):
             self.down_max_pool_list_ir.append(nn.MaxPool2d(2, 2))
@@ -392,7 +372,7 @@ class GSRNet(nn.Module):
         for i in range(self.num_unet_layers-2, -1, -1):
             self.up_conv_list.append(ConvBlock(2 * num_channels_list[i], num_channels_list[i], num_conv_up_layers_list[i]))
         
-        self.proj = nn.Conv2d(num_channels_list[0], 1, kernel_size=1, stride=1, padding=0)
+        self.proj = nn.Conv2d(num_channels_list[0], num_thermal_channels, kernel_size=1, stride=1, padding=0)
 
         total_params = sum(p.numel() for p in self.parameters())
         print(f"Initialized Model With {total_params} Parameters.")
@@ -448,5 +428,5 @@ def get_model(name):
         return GSRNet(opt.HR_image_size, opt.window_size, opt.num_head_list,
                    opt.num_self_attention_layers, opt.num_cross_attention_layers, opt.num_reconstruction_layers,
                    opt.num_channels_list, opt.num_conv_down_layers_list, opt.num_conv_up_layers_list,
-                   opt.dropout, opt.upsample_mode).to(opt.gpu)
+                   opt.dropout, opt.upsample_mode, opt.num_thermal_channels).to(opt.gpu)
 

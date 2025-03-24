@@ -10,17 +10,18 @@ HR_image_size = (512, 640)
 
 # Model
 model_name = 'GSRNet'
-batch_size = 2
+batch_size = 4
 window_size = (8, 10)
-num_self_attention_layers = 0
+num_self_attention_layers = 1
 num_cross_attention_layers = 1
-num_reconstruction_layers = 0
+num_reconstruction_layers = 1
 num_head_list = [4, 8, 16, 32]
 num_channels_list = [64, 128, 256, 512]
 num_conv_down_layers_list = [2, 2, 2, 2]
 num_conv_up_layers_list = [2, 2, 2, 2]
 dropout = 0.0
 upsample_mode = 'bicubic' # 'conv_transpose' or 'bicubic'
+num_thermal_channels = 3
 
 # Loss
 pixel_loss_method = torch.nn.functional.mse_loss

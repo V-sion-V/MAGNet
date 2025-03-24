@@ -77,7 +77,7 @@ for epoch in range(1, opt.epochs+1):
             total_eval_psnr += utils.psnr(pred_hr, hr).item()
             total_eval_ssim += utils.ssim(pred_hr, hr).item()
 
-            for i in range(opt.batch_size):
+            for i in range(lr.shape[0]):
                 writer.add_image(f"Eval/Predict{data['Name'][i]}", pred_hr[i], epoch)
 
         total_eval_loss /= eval_loader.__len__()
