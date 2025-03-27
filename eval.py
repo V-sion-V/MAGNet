@@ -10,7 +10,7 @@ import opt
 from main.model import get_model
 
 batch_size = 1
-output_dir = "./output"
+output_dir = "output/VGTSR/BD4"
 
 eval_set = dataset.get_dataset(mode='eval')
 eval_loader = DataLoader(eval_set, batch_size=batch_size, shuffle=False)
@@ -30,7 +30,7 @@ def load_model(ckpt_path):
     
     return model
 
-model = load_model("checkpoints/GSRNet_2025-03-18_14-15-56/model35.pth")
+model = load_model("checkpoints/GSRNet_2025-03-26_13-30-11/model42.pth")
 
 total_ssim = 0
 total_psnr = 0
@@ -50,7 +50,7 @@ with torch.no_grad():
 
         for i in range(batch_size):
             pred_hr_img = pred_hr[i].detach().permute(1, 2, 0).cpu().numpy() * 255
-
+            pred_hr_img = cv2.cvtColor(pred_hr_img, cv2.COLOR_RGB2BGR)
             cv2.imwrite(str(os.path.join(output_dir, data['Name'][i])), pred_hr_img.astype('uint8'))
 
     total_ssim /= eval_loader.__len__()

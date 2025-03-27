@@ -10,7 +10,7 @@ from opt import lr_dir_name, guide_dir_name, eval_dataset_path, train_dataset_pa
 
 
 class GSRDataset(data.Dataset):
-    def __init__(self, lr_dir, guide_dir, hr_dir, progressive=False, start_scale = 1, thermal_color_mode='Gray'):
+    def __init__(self, lr_dir, guide_dir, hr_dir, progressive=False, start_scale = 1, thermal_color_mode='Gray', downsample_from_hr:bool=False):
         super(GSRDataset, self).__init__()
 
         self.hr_ir_path = hr_dir
@@ -21,6 +21,7 @@ class GSRDataset(data.Dataset):
         self.start_scale = start_scale
 
         self.thermal_color_mode = thermal_color_mode
+        self.downsample_from_hr = downsample_from_hr
 
         self.hr_ir_file_name_list = sorted(os.listdir(self.hr_ir_path))
         self.hr_rgb_file_name_list = sorted(os.listdir(self.hr_rgb_path))

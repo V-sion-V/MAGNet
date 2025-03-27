@@ -3,7 +3,7 @@
 # Data
 train_dataset_path = 'dataset/VGTSR/train'
 eval_dataset_path = 'dataset/VGTSR/eval'
-lr_dir_name = 'LR thermal/8/BI'
+lr_dir_name = 'LR thermal/4/BI'
 guide_dir_name = 'HR RGB'
 hr_dir_name = 'GT thermal'
 HR_image_size = (512, 640)
@@ -38,7 +38,7 @@ checkpoints_dir = 'checkpoints'
 progressive = False
 start_scale = 1
 tensorboard_log_dir = 'tensorboard_log'
-lr_decay_step = 16
+lr_decay_step = 10
 lr_decay_rate = 0.5
 data_parallel = True
 
