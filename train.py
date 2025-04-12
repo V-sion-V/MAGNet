@@ -12,6 +12,7 @@ import opt
 from main.model import get_model
 
 from tensorboardX import SummaryWriter
+import wandb
 import torchvision.utils as vutils
 
 train_set = dataset.get_dataset(mode='train', progressive=opt.progressive, start_scale=opt.start_scale)
@@ -34,7 +35,16 @@ print(f"Checkpoints saved in directory: {current_checkpoint_dir}")
 os.mkdir(current_checkpoint_dir)
 shutil.copy("opt.py", os.path.join(current_checkpoint_dir, "opt.txt"))
 
-writer = SummaryWriter(logdir=os.path.join(opt.tensorboard_log_dir, f"GSRNet_{start_train_time_str}"))
+if opt.use_tensorboard:
+    writer = SummaryWriter(logdir=os.path.join(opt.tensorboard_log_dir, f"GSRNet_{start_train_time_str}"))
+
+if opt.use_wandb:
+    wandb.login(key=opt.wandb_key)
+    wandb.init(project="MAGNet", name=start_train_time_str, 
+               config={"lr_decay_step": opt.lr_decay_step, "lr": opt.learning_rate, "lr_dir_name": opt.lr_dir_name,
+                       "num_fusion_layer": opt.num_cross_attention_layers, "num_extract_layer": opt.num_self_attention_layers, "num_reconstruct_layer": opt.num_reconstruction_layers,
+                       "multi-scale": len(opt.num_channels_list), "num_channels": opt.num_channels_list, "dataset": opt.train_dataset_path}, 
+               dir=opt.wandb_log_dir)
 
 for epoch in range(1, opt.epochs+1):
     model.train()
@@ -46,12 +56,15 @@ for epoch in range(1, opt.epochs+1):
         pred_hr = model(lr, guide)
         pred_hr = torch.clamp(pred_hr, 0, 1)
         loss = utils.calc_loss(pred_hr, hr)
-        total_train_loss += loss.item()
-        range_train_loss += loss.item()
+        total_train_loss += loss.detach().item()
+        range_train_loss += loss.detach().item()
         loss.backward()
         optim.step()
 
-        writer.add_scalar(f'Train/BatchLoss', loss.item(), (epoch-1) * train_loader.__len__() + batch_idx)
+        if opt.use_tensorboard:
+            writer.add_scalar(f'Train/BatchLoss', loss.item(), (epoch-1) * train_loader.__len__() + batch_idx)
+        if opt.use_wandb:
+            wandb.log({"Train/BatchLoss": loss.item(), "Train/ImageCount": (epoch-1) * train_loader.__len__() + batch_idx})
 
         batch_to_print = train_loader.__len__() // opt.print_loss_in_one_epoch
         if batch_idx % batch_to_print == batch_to_print - 1:
@@ -77,8 +90,9 @@ for epoch in range(1, opt.epochs+1):
             total_eval_psnr += utils.psnr(pred_hr, hr).item()
             total_eval_ssim += utils.ssim(pred_hr, hr).item()
 
-            for i in range(lr.shape[0]):
-                writer.add_image(f"Eval/Predict{data['Name'][i]}", pred_hr[i], epoch)
+            if opt.use_tensorboard:
+                for i in range(lr.shape[0]):
+                    writer.add_image(f"Eval/Predict{data['Name'][i]}", pred_hr[i], epoch)
 
         total_eval_loss /= eval_loader.__len__()
         total_eval_psnr /= eval_loader.__len__()
@@ -87,13 +101,19 @@ for epoch in range(1, opt.epochs+1):
         print(f"Total Train Loss: {total_train_loss}, Eval Loss: {total_eval_loss}")
         print(f"Eval PSNR: {total_eval_psnr}, Eval SSIM: {total_eval_ssim}")
 
-        writer.add_scalar(f'Train/TotalLoss', total_train_loss, epoch)
-        writer.add_scalar(f'Eval/TotalLoss', total_eval_loss, epoch)
-        writer.add_scalar(f'Eval/PSNR', total_eval_psnr, epoch)
-        writer.add_scalar(f'Eval/SSIM', total_eval_ssim, epoch)
+        if opt.use_tensorboard:
+            writer.add_scalar(f'Train/TotalLoss', total_train_loss, epoch)
+            writer.add_scalar(f'Eval/TotalLoss', total_eval_loss, epoch)
+            writer.add_scalar(f'Eval/PSNR', total_eval_psnr, epoch)
+            writer.add_scalar(f'Eval/SSIM', total_eval_ssim, epoch)
+        if opt.use_wandb:
+            wandb.log({'Train/TotalLoss':total_train_loss, 'Eval/TotalLoss': total_eval_loss, \
+                       'Eval/PSNR': total_eval_psnr, 'Eval/SSIM': total_eval_ssim, 'Epoch': epoch})
 
     if epoch % opt.save_model_epoch == opt.save_model_epoch - 1:
         print(f"Epoch {epoch} model saved.")
         torch.save(model.state_dict(), os.path.join(current_checkpoint_dir, f"model{epoch}.pth"))
 
 torch.save(model.state_dict(), os.path.join(current_checkpoint_dir, f"model{opt.epochs}.pth"))
+if opt.use_wandb:
+    wandb.finish()

@@ -10,7 +10,7 @@ import opt
 from main.model import get_model
 
 batch_size = 1
-output_dir = "output/VGTSR/BI8"
+output_dir = "output/VGTSR/test"
 
 eval_set = dataset.get_dataset(mode='eval')
 eval_loader = DataLoader(eval_set, batch_size=batch_size, shuffle=False)
@@ -32,7 +32,7 @@ def load_model(ckpt_path):
     
     return model
 
-model = load_model("checkpoints/GSRNet_2025-03-29_14-41-38/model60.pth")
+model = load_model("result/checkpoints/GSRNet_2025-04-04_14-53-57/model73.pth")
 
 total_ssim = 0
 total_psnr = 0
