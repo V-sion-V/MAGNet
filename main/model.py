@@ -43,7 +43,7 @@ class WindowSelfAttention(nn.Module):
         if num_channels // num_heads != num_channels / num_heads:
             raise ValueError("Number of channels must be divisible by number of heads.")
 
-    def forward(self, x):
+    def forward(self, x, shift_mask:torch.Tensor=None):
         # B_ = batch size * window count, N = window element count, C = number of channels
         B_, N, C = x.shape
         assert C == self.num_channels, "Number of channels must match."
@@ -54,10 +54,13 @@ class WindowSelfAttention(nn.Module):
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous().unsqueeze(0)  # 1, nH, Wh*Ww, Wh*Ww
+        
+        if shift_mask is not None:
+            relative_position_bias = relative_position_bias + shift_mask.repeat(B_//shift_mask.shape[0],1,1).unsqueeze(1)
 
         # [B_, num_heads, window element count, channel in head] -> [B_, window element count, num_heads, channel in head]
-        out = nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=relative_position_bias.unsqueeze(0))
+        out = nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=relative_position_bias)
         out = out.transpose(1, 2).reshape(B_, N, C)
 
         out= self.proj(out)
@@ -109,7 +112,7 @@ class WindowCrossAttention(nn.Module):
         if num_channels // num_heads != num_channels / num_heads:
             raise ValueError("Number of channels must be divisible by number of heads.")
 
-    def forward(self, x, y):
+    def forward(self, x, y, shift_mask:torch.Tensor=None):
         # B_ = batch size * window count, N = window element count, C = number of channels
         B_, N, C = x.shape
         _B_, _N, _C = y.shape
@@ -123,10 +126,13 @@ class WindowCrossAttention(nn.Module):
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous().unsqueeze(0)  # 1, nH, Wh*Ww, Wh*Ww
+        
+        if shift_mask is not None:
+            relative_position_bias = relative_position_bias + shift_mask.repeat(B_//shift_mask.shape[0],1,1).unsqueeze(1)
 
         # [B_, num_heads, window element count, channel in head] -> [B_, window element count, num_heads, channel in head]
-        out = nn.functional.scaled_dot_product_attention(qx, ky, vy, attn_mask=relative_position_bias.unsqueeze(0))
+        out = nn.functional.scaled_dot_product_attention(qx, ky, vy, attn_mask=relative_position_bias)
         out = out.transpose(1, 2).reshape(B_, N, C)
 
         out = self.proj(out)
@@ -165,13 +171,16 @@ class AttentionExtractionBlock(nn.Module):
 
     def forward(self, x):
         image_size = x.shape[-2:]
+        shift_mask = utils.calculate_shift_mask(image_size, self.window_size)
+
         x = utils.window_partition(x, self.window_size)
         x = self.self_attention1(x)
         x = self.feed_forward1(x)
         x = utils.window_merge(x, self.window_size, image_size)
         x = utils.half_window_shift(x, self.window_size, 'forward')
         x = utils.window_partition(x, self.window_size)
-        x = self.self_attention2(x)
+        
+        x = self.self_attention2(x, shift_mask)
         x = self.feed_forward2(x)
         x = utils.window_merge(x, self.window_size, image_size)
         x = utils.half_window_shift(x, self.window_size, 'backward')
@@ -202,6 +211,7 @@ class AttentionFusionBlock(nn.Module):
     def forward(self, IN):
         x, y = IN
         image_size = x.shape[-2:]
+        shift_mask = utils.calculate_shift_mask(image_size, self.window_size)
 
         x = utils.window_partition(x, self.window_size)
         y = utils.window_partition(y, self.window_size)
@@ -220,8 +230,8 @@ class AttentionFusionBlock(nn.Module):
         x = utils.window_partition(x, self.window_size)
         y = utils.window_partition(y, self.window_size)
 
-        x = self.self_attention3(x)
-        y = self.self_attention4(y)
+        x = self.self_attention3(x, shift_mask)
+        y = self.self_attention4(y, shift_mask)
         x = self.feed_forward3(x)
         y = self.feed_forward4(y)
 
@@ -248,8 +258,8 @@ class AttentionFusionBlock(nn.Module):
         x = utils.window_partition(x, self.window_size)
         y = utils.window_partition(y, self.window_size)
 
-        new_x = self.cross_attention3(x, y)
-        new_y = self.cross_attention4(y, x)
+        new_x = self.cross_attention3(x, y, shift_mask)
+        new_y = self.cross_attention4(y, x, shift_mask)
         x = self.feed_forward7(x)
         y = self.feed_forward8(y)
 
@@ -379,7 +389,6 @@ class GSRNet(nn.Module):
 
 
     def forward(self, x:torch.Tensor, y:torch.Tensor):
-        x = F.interpolate(x, y.shape[-2:], mode='bicubic', align_corners=False)
         original_x = x
         
         # Downward path

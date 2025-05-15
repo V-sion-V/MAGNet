@@ -6,6 +6,8 @@ from torch import nn
 import opt
 
 
+saved_mask = {(0, 0) : None}
+
 def window_partition (x:torch.Tensor, window_size:tuple): #[B, C, H, W] -> [B_, N, C]
     B, C, H, W = x.shape
     window_height, window_width = window_size
@@ -32,6 +34,37 @@ def half_window_shift (x:torch.Tensor, window_size:tuple, direction:str): #[B, C
         return torch.roll(x, shifts=(window_height//2, window_width//2), dims=(2, 3))
     else:
         raise ValueError('Direction must be either "forward" or "backward".')
+
+def calculate_shift_mask(image_size:tuple, window_size:tuple):
+    # calculate attention mask for SW-MSA
+    if saved_mask.get(image_size) is not None:
+        return saved_mask[image_size]
+
+    H, W = image_size
+    window_height, window_width = window_size
+    shift_height = window_height // 2
+    shift_width = window_width // 2
+    img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
+    h_slices = (slice(0, -window_height),
+                slice(-window_height, -shift_height),
+                slice(-shift_height, None))
+    w_slices = (slice(0, -window_width),
+                slice(-window_width, -shift_width),
+                slice(-shift_width, None))
+    cnt = 0
+    for h in h_slices:
+        for w in w_slices:
+            img_mask[:, h, w, :] = cnt
+            cnt += 1
+
+    mask_windows = window_partition(img_mask.permute(0, 3, 1, 2), window_size)  # nW, window_size, window_size, 1
+    mask_windows = mask_windows.view(-1, window_height * window_width)
+    attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+    attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-1000.0)).masked_fill(attn_mask == 0, float(0.0)).to(opt.gpu)
+
+    saved_mask[image_size] = attn_mask
+
+    return attn_mask
 
 ssim = torchmetrics.image.StructuralSimilarityIndexMeasure(data_range=1.0).to(opt.gpu)
 def ssim_loss (x:torch.Tensor, y:torch.Tensor):

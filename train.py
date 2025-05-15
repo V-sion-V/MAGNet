@@ -14,6 +14,7 @@ from main.model import get_model
 from tensorboardX import SummaryWriter
 import wandb
 import torchvision.utils as vutils
+import random
 
 train_set = dataset.get_dataset(mode='train', progressive=opt.progressive, start_scale=opt.start_scale)
 train_loader = DataLoader(train_set, batch_size=opt.batch_size, shuffle=True)
@@ -41,9 +42,9 @@ if opt.use_tensorboard:
 if opt.use_wandb:
     wandb.login(key=opt.wandb_key)
     wandb.init(project="MAGNet", name=start_train_time_str, 
-               config={"lr_decay_step": opt.lr_decay_step, "lr": opt.learning_rate, "lr_dir_name": opt.lr_dir_name,
+               config={"lr_decay_step": opt.lr_decay_step, "lr": opt.learning_rate, "lr_dir_name": opt.lr_dir_name, "window_size": opt.window_size,
                        "num_fusion_layer": opt.num_cross_attention_layers, "num_extract_layer": opt.num_self_attention_layers, "num_reconstruct_layer": opt.num_reconstruction_layers,
-                       "multi-scale": len(opt.num_channels_list), "num_channels": opt.num_channels_list, "dataset": opt.train_dataset_path}, 
+                       "multi-scale": len(opt.num_channels_list), "num_channels": opt.num_channels_list, "dataset": opt.train_dataset_path, "data_aug": opt.data_aug}, 
                dir=opt.wandb_log_dir)
 
 for epoch in range(1, opt.epochs+1):
@@ -52,6 +53,13 @@ for epoch in range(1, opt.epochs+1):
     range_train_loss = 0
     for (batch_idx, data) in enumerate(train_loader):
         lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
+        lr = torch.nn.functional.interpolate(lr, hr.shape[-2:], mode='bicubic', align_corners=False)
+        if opt.data_aug:
+            shift_h = random.randrange(0, opt.window_size[0])
+            shift_w = random.randrange(0, opt.window_size[1])
+            lr = lr[:,:,shift_h:lr.shape[2] + shift_h - opt.window_size[0]*8,shift_w:lr.shape[3] + shift_w - opt.window_size[1]*8]
+            hr = hr[:,:,shift_h:hr.shape[2] + shift_h-opt.window_size[0]*8,shift_w:hr.shape[3] + shift_w-opt.window_size[1]*8]
+            guide = guide[:,:,shift_h:guide.shape[2] + shift_h-opt.window_size[0]*8,shift_w:guide.shape[3] + shift_w-opt.window_size[1]*8]
         optim.zero_grad()
         pred_hr = model(lr, guide)
         pred_hr = torch.clamp(pred_hr, 0, 1)
@@ -83,6 +91,7 @@ for epoch in range(1, opt.epochs+1):
         total_eval_ssim = 0
         for (batch_idx, data) in enumerate(eval_loader):
             lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
+            lr = torch.nn.functional.interpolate(lr, hr.shape[-2:], mode='bicubic', align_corners=False)
             pred_hr = model(lr, guide)
             pred_hr = torch.clamp(pred_hr, 0, 1)
             loss = utils.calc_loss(pred_hr, hr)

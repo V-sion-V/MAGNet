@@ -10,7 +10,7 @@ import opt
 from main.model import get_model
 
 batch_size = 1
-output_dir = "output/VGTSR/test"
+output_dir = "result/output/VGTSR/test"
 
 eval_set = dataset.get_dataset(mode='eval')
 eval_loader = DataLoader(eval_set, batch_size=batch_size, shuffle=False)
@@ -32,7 +32,7 @@ def load_model(ckpt_path):
     
     return model
 
-model = load_model("result/checkpoints/GSRNet_2025-04-04_14-53-57/model73.pth")
+model = load_model("result/checkpoints/GSRNet_2025-05-02_17-32-37/model346.pth")
 
 total_ssim = 0
 total_psnr = 0
@@ -40,6 +40,7 @@ total_psnr = 0
 with torch.no_grad():
     for (idx, data) in enumerate(eval_loader):
         lr, hr, guide = data["LR"].to(opt.gpu), data["HR"].to(opt.gpu), data["Guide"].to(opt.gpu)
+        lr = torch.nn.functional.interpolate(lr, hr.shape[-2:], mode='bicubic', align_corners=False)
         pred_hr = model(lr, guide)
         #pred_hr = torch.nn.functional.interpolate(lr, size=hr.shape[-2:], mode='bicubic', align_corners=False)
         pred_hr = torch.clamp(pred_hr, 0, 1)
